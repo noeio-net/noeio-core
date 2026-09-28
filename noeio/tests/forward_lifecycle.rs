@@ -346,11 +346,12 @@ fn invalid_rule_exits_with_usage_code() {
     );
 }
 
-/// FR-4 at the process level: a UDP rule relays datagrams, and a graceful
-/// exit reports the sessions it dropped and frees the port.
-#[cfg(unix)]
+/// FR-4 at the process level: a UDP rule relays datagrams, and ending the
+/// process frees the port. On Unix the exit is graceful (SIGTERM) and the
+/// summary reports the session it dropped; elsewhere the child is killed
+/// and only the release is checked.
 #[test]
-fn udp_forward_relays_and_exits_gracefully() {
+fn udp_forward_relays_and_exits() {
     let Some(lan) = primary_lan_addr() else {
         eprintln!("skipping: no non-loopback IPv4 address on this machine");
         return;
@@ -369,20 +370,30 @@ fn udp_forward_relays_and_exits_gracefully() {
         assert_eq!(&buf[..n], &msg, "udp echo through the forwarder");
     }
 
-    send_signal(&fwd.child, "TERM");
-    let status = wait_exit(&mut fwd.child, Duration::from_secs(2));
-    assert_eq!(status.code(), Some(0));
-    let summary = fwd.take_summary();
-    assert!(
-        summary
-            .iter()
-            .any(|l| l == "shutting down: 1 listener closed, 1 session dropped"),
-        "{summary:?}"
-    );
-    assert!(
-        summary.iter().any(|l| l.starts_with("total: 1 sessions")),
-        "{summary:?}"
-    );
+    #[cfg(unix)]
+    {
+        send_signal(&fwd.child, "TERM");
+        let status = wait_exit(&mut fwd.child, Duration::from_secs(2));
+        assert_eq!(status.code(), Some(0));
+        let summary = fwd.take_summary();
+        assert!(
+            summary
+                .iter()
+                .any(|l| l == "shutting down: 1 listener closed, 1 session dropped"),
+            "{summary:?}"
+        );
+        assert!(
+            summary.iter().any(|l| l.starts_with("total: 1 sessions")),
+            "{summary:?}"
+        );
+    }
+    #[cfg(not(unix))]
+    {
+        fwd.child.kill().unwrap();
+        let status = wait_exit(&mut fwd.child, Duration::from_secs(2));
+        assert!(!status.success());
+        assert!(fwd.take_summary().is_empty());
+    }
     // The port is free again.
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
