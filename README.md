@@ -14,6 +14,7 @@ Noeio is a self-hostable layer-3 mesh networking system with stateless, lightwei
 - **Lowest-latency path selection** — every candidate path (LAN and public) is probed with ping/pong RTT sampling, and traffic always takes the fastest one, with debounced switching
 - **Self-hosted relay fallback** — when no direct path exists, traffic falls back to your own derper relay, guarded by network-scoped token auth
 - **Subnet routing** — a Linux node can advertise LAN CIDRs and forward/SNAT for hosts that run no agent; every platform can accept them. See [docs/subnet-router.md](docs/subnet-router.md)
+- **Port forwarding** — `noeio forward` exposes one port across the overlay/LAN boundary in either direction, in the foreground and in user space, on every platform. See [docs/port-forward.md](docs/port-forward.md)
 - **Cross-platform** — runs on Linux, macOS, and Windows
 
 ## Motivation

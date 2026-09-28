@@ -278,20 +278,31 @@ pub async fn resolve_control_plane(cfg: &crate::config::Config) -> Vec<IpAddr> {
     out
 }
 
-/// IPv4 subnets our physical interfaces sit on, for the local-LAN rule.
-/// Loopback and our own TUNs (`exclude`) are left out.
+/// IPv4 networks configured on our non-loopback interfaces, minus our own
+/// TUNs (`exclude`). Shared by the local-LAN route rule and by
+/// `noeio forward --listen lan:<port>`. Filtering is by interface flag only,
+/// exactly as [`local_lans`] always did; callers that must not see a
+/// loopback *address* on an odd interface filter that themselves.
 #[cfg(unix)]
-pub fn local_lans(exclude: &[IpAddr]) -> Vec<Ipv4Cidr> {
+fn physical_v4(exclude: &[IpAddr]) -> impl Iterator<Item = pnet::ipnetwork::Ipv4Network> + '_ {
     pnet::datalink::interfaces()
         .into_iter()
         .filter(|iface| !iface.is_loopback())
         .flat_map(|iface| iface.ips)
-        .filter_map(|net| match net {
+        .filter_map(move |net| match net {
             pnet::ipnetwork::IpNetwork::V4(v4) if !exclude.contains(&IpAddr::V4(v4.ip())) => {
-                Some(Ipv4Cidr::new(v4.ip(), v4.prefix()).network())
+                Some(v4)
             }
             _ => None,
         })
+}
+
+/// IPv4 subnets our physical interfaces sit on, for the local-LAN rule.
+/// Loopback and our own TUNs (`exclude`) are left out.
+#[cfg(unix)]
+pub fn local_lans(exclude: &[IpAddr]) -> Vec<Ipv4Cidr> {
+    physical_v4(exclude)
+        .map(|v4| Ipv4Cidr::new(v4.ip(), v4.prefix()).network())
         // A /32 on a physical interface is a point-to-point address, not a
         // LAN; it should not veto a subnet route.
         .filter(|cidr| cidr.prefix_len() < 32)
@@ -305,6 +316,28 @@ pub fn local_lans(_exclude: &[IpAddr]) -> Vec<Ipv4Cidr> {
     // longest-prefix match still prefers a directly connected /24 over an
     // equal-or-shorter learned prefix.
     Vec::new()
+}
+
+/// IPv4 addresses of our non-loopback interfaces (`exclude`, i.e. our TUNs,
+/// left out), sorted and deduplicated. Empty on platforms where interfaces
+/// cannot be enumerated; see [`can_enumerate_interfaces`].
+#[cfg(unix)]
+pub fn local_addrs(exclude: &[IpAddr]) -> Vec<Ipv4Addr> {
+    let mut addrs: Vec<Ipv4Addr> = physical_v4(exclude).map(|v4| v4.ip()).collect();
+    addrs.sort();
+    addrs.dedup();
+    addrs
+}
+
+#[cfg(not(unix))]
+pub fn local_addrs(_exclude: &[IpAddr]) -> Vec<Ipv4Addr> {
+    Vec::new()
+}
+
+/// Whether [`local_addrs`] / [`local_lans`] can see the interface table at
+/// all. False on Windows, where pnet is not linked.
+pub const fn can_enumerate_interfaces() -> bool {
+    cfg!(unix)
 }
 
 #[cfg(test)]

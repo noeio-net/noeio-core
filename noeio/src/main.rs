@@ -17,7 +17,9 @@ async fn main() {
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        // Logs go to stderr so that the human-facing stdout of `forward`
+        // (banner, exit summary) and `route list` stays clean (§6.4).
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .try_init();
 
     match cli.command {
@@ -65,8 +67,8 @@ async fn main() {
                         tracing::error!("rpc service error: {}", err);
                     }
                 }
-                _ = wait_for_shutdown_signal() => {
-                    tracing::info!("shutdown signal received, stopping noeio daemon");
+                signal = noeio::signal::wait_for_shutdown() => {
+                    tracing::info!(signal, "shutdown signal received, stopping noeio daemon");
                 }
             }
             if tokio::time::timeout(Duration::from_secs(5), state.shutdown())
@@ -112,29 +114,22 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-    }
-}
-
-#[cfg(unix)]
-async fn wait_for_shutdown_signal() {
-    use tokio::signal::unix::{SignalKind, signal};
-
-    let mut sigterm = match signal(SignalKind::terminate()) {
-        Ok(s) => s,
-        Err(err) => {
-            tracing::warn!("failed to register SIGTERM handler: {}", err);
-            let _ = tokio::signal::ctrl_c().await;
-            return;
+        Command::Forward {
+            listen,
+            target,
+            proto,
+            allow_from,
+        } => {
+            // Foreground like `boot`, not one-shot like `route`: the command
+            // runs until a shutdown signal and the forwarding ends with it.
+            let code = noeio::forward::run(noeio::forward::Args {
+                listen,
+                target,
+                proto,
+                allow_from,
+            })
+            .await;
+            std::process::exit(code);
         }
-    };
-
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {}
-        _ = sigterm.recv() => {}
     }
-}
-
-#[cfg(not(unix))]
-async fn wait_for_shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
 }

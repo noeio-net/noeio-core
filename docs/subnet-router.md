@@ -199,4 +199,6 @@ noeio only touches its own table `ip noeio`. It never modifies `nat`,
 IPv6 subnets; exit nodes (`0.0.0.0/0`); load balancing across several
 advertisers of the same CIDR (active/standby only); LAN-initiated
 connections toward overlay nodes (only overlay → LAN is set up; replies
-ride on conntrack); macOS as an advertiser (pf).
+ride on conntrack — for a single port use
+`noeio forward --listen lan:<port> --target <overlay ip>:<port>`, see
+[port-forward.md](./port-forward.md)); macOS as an advertiser (pf).

@@ -14,6 +14,7 @@ Noeio 是一个可私有化部署、节点无状态且轻量的三层（Layer-3�
 - **最低延迟选路** —— 对每条候选路径（局域网与公网）做 ping/pong RTT 探测，流量始终走最快的一条，切换带防抖
 - **自部署中继兜底** —— 无直连路径时回退到你自己的 derper 中继，由网络级 token 认证保护
 - **子网路由** —— Linux 节点可宣告 LAN 网段并为未安装 agent 的主机转发与 SNAT；所有平台都可以接受这些路由。详见 [docs/subnet-router.md](docs/subnet-router.md)
+- **端口转发** —— `noeio forward` 在前台、纯用户态地把一个端口跨 overlay/LAN 边界双向暴露，三平台一致。详见 [docs/port-forward.md](docs/port-forward.md)
 - **跨平台** —— 支持 Linux、macOS 和 Windows
 
 ## 初衷

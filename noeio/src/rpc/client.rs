@@ -4,7 +4,8 @@ use noeio_proto::proto::noeio::v1::route_service_client::RouteServiceClient;
 use noeio_proto::proto::noeio::v1::virtual_nic_service_client::VirtualNicServiceClient;
 use noeio_proto::proto::noeio::v1::{
     AdvertiseRouteRequest, CreateVirtualNicRequest, ListRoutesRequest, ListRoutesResponse,
-    NetCheckRequest, PathKind, RouteSource, RouteState, WithdrawRouteRequest,
+    ListVirtualNicsRequest, NetCheckRequest, PathKind, RouteSource, RouteState, VirtualNicEntry,
+    WithdrawRouteRequest,
 };
 use tonic::transport::Channel;
 
@@ -61,6 +62,19 @@ impl CliRpcClient {
             .await?;
         println!("Vnic created, tun: {}", resp.get_ref().tun_name);
         Ok(())
+    }
+
+    /// The daemon's virtual nics with the peers known in each network. The
+    /// one read-only query `noeio forward` makes (FR-6.2).
+    pub async fn list_virtual_nics(
+        &mut self,
+    ) -> Result<Vec<VirtualNicEntry>, Box<dyn std::error::Error>> {
+        let resp = self
+            .vnic_client
+            .list_virtual_nics(ListVirtualNicsRequest {})
+            .await
+            .map_err(render_status)?;
+        Ok(resp.into_inner().nics)
     }
 
     pub async fn advertise_routes(
