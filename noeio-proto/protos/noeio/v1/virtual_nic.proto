@@ -12,6 +12,30 @@ message CreateVirtualNicResponse {
   string tun_name = 1;
 }
 
+message ListVirtualNicsRequest {}
+
+// One local virtual nic and what the daemon knows about its network. This is
+// the only thing `noeio forward` asks the daemon for (a read-only snapshot
+// at start-up); the daemon never learns that a forwarder exists.
+message VirtualNicEntry {
+  // Interface name in the OS: noeio0 on Linux, utunN on macOS, the adapter
+  // name on Windows.
+  string tun_name = 1;
+  // This nic's overlay address.
+  string ip = 2;
+  // The network the nic joined.
+  string network_id = 3;
+  // This node's peer id in that network.
+  uint32 peer_id = 4;
+  // Overlay addresses of the other peers currently known in that network.
+  repeated string peer_ips = 5;
+}
+
+message ListVirtualNicsResponse {
+  repeated VirtualNicEntry nics = 1;
+}
+
 service VirtualNicService {
   rpc CreateVirtualNic(CreateVirtualNicRequest) returns (CreateVirtualNicResponse);
+  rpc ListVirtualNics(ListVirtualNicsRequest) returns (ListVirtualNicsResponse);
 }

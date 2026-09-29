@@ -3,6 +3,8 @@ pub mod common;
 pub mod config;
 pub mod daemon;
 pub mod errors;
+pub mod forward;
 pub mod interface;
 pub mod rpc;
+pub mod signal;
 pub mod tunnel;

@@ -52,6 +52,43 @@ pub enum Command {
         #[command(subcommand)]
         command: RouteCommand,
     },
+    /// Forward one port in the foreground; the forwarding lives exactly as
+    /// long as this command runs (Ctrl+C / SIGTERM / SIGHUP stop it).
+    ///
+    /// Needs the daemon (`noeio boot`) to be running and the same privileges
+    /// as `noeio route`, because the overlay addresses are asked from the
+    /// daemon's RPC socket.
+    #[command(after_help = "\
+Examples:
+  noeio forward --listen noeio:8080 --target 192.168.10.7:80
+      expose a LAN host's port to the overlay
+  noeio forward --listen lan:9090 --target 110.20.0.9:22
+      let LAN machines without an agent reach an overlay node
+  noeio forward --listen noeio:5432 --target 127.0.0.1:5432 --allow-from 110.20.0.0/24
+      expose a loopback-only local service to one overlay subnet
+
+Exit codes: 0 stopped by a signal, 1 environment error (daemon down, bind
+failed), 2 invalid rule.")]
+    Forward {
+        /// Where to listen, as <ADDR>:<PORT>. ADDR is `noeio` (every overlay
+        /// address of this node; only peers can connect), `lan` (every
+        /// physical interface address; only the LAN can connect) or one
+        /// specific local IPv4 address. 0.0.0.0 and 127.0.0.1 are refused.
+        #[arg(long, value_name = "ADDR:PORT")]
+        listen: String,
+        /// Where to forward to, as <IPv4>:<PORT> (no hostnames), e.g.
+        /// 192.168.10.7:80 or 127.0.0.1:5432
+        #[arg(long, value_name = "ADDR:PORT")]
+        target: String,
+        /// Transport protocol. UDP keeps one session per client address,
+        /// reclaimed after 60s idle, at most 512 per process
+        #[arg(long, value_enum, default_value_t = crate::forward::rule::Proto::Tcp)]
+        proto: crate::forward::rule::Proto,
+        /// Only accept connections from these IPv4 CIDRs (comma separated).
+        /// A coarse source-IP filter, not authentication
+        #[arg(long = "allow-from", value_delimiter = ',', value_name = "CIDR")]
+        allow_from: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
